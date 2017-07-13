@@ -31,17 +31,23 @@ int main(int argc, char** argv) {
   // Part 0) Setting Parameters
   //----------------------------------------------------------------------------------------------------------------
   
+  // Flexible variables:
+  double ao = atof(argv[4]); // [0.1 - 5.0]
+  double rcut = atof(argv[5]); // [7.0 - 100.0] -> make sure to use fine grid with large cut
+  int radialN = atoi(argv[6]); // [1-4]
+  int lMax = atoi(argv[7]) ; // [1-9]
+
+  // Non-Flexible variables:
   double pi = 3.14159265358979324;
   double halfPi = 3.14159265358979324*0.5;
 
-  double rcut = 5.0;
   double rsc = pi*pi*0.5*0.5*rcut; // rescaleing the integration for gauss-legendre quaduature.
 
-  double sig = 1;
+  double sig = 1.0; //Ghost variable, not used for now.
 
-  double ao = 1.0;
   double z = 1.0;
   double norm = pow(sqrt(z/ao),3);
+  int typesN = 3;
   
   //----------------------------------------------------------------------------------------------------------------
   // Part 1) Retrieving Data -> W, Gauss-Legendre, XYZ-Smeared
@@ -53,11 +59,10 @@ int main(int argc, char** argv) {
   cube Z;
   cube GLC(GL.n_rows,GL.n_rows,GL.n_rows); // GL weights in 3D which is just an outer product of GL;
   
-
-  GL.load("parameters100.txt");GLC.load("GLC100.bi");//
-//  GL.load("parameters50.txt");  GLC.load("GLC50.bi");//
-//  GL.load("parameters70.txt");GLC.load("GLC70.bi"); //
-//  GL.load("P200_both.txt"); GLC.load("GLC200.bi"); //
+  GL.load("TXTs/parameters100.txt");GLC.load("Bi/GLC100.bi");//
+//  GL.load("TXTs/parameters50.txt");  GLC.load("Bi/GLC50.bi");//
+//  GL.load("TXTs/parameters70.txt");GLC.load("Bi/GLC70.bi"); //
+//  GL.load("TXTs/P200_both.txt"); GLC.load("Bi/GLC200.bi"); //
 
 // Getting R, Theta and Phi rescaled for the Gaull-Legendre quadrature
   vec R = rcut*0.5*GL.col(0) + rcut*0.5 ;
@@ -85,9 +90,11 @@ int main(int argc, char** argv) {
   for(int i=0; i < coord.n_rows; i++)  { 
      if(type[i] == argv[2] ){typeA(i) =1;}
    }
+
   for(int i=0; i < coord.n_rows; i++)  { 
      if(type[i] == argv[3] ){typeB(i) =1;}
    }
+
 // New coordinates -> type A + Hydrogen and type B + Hydrogen
   mat coord_a = zeros<mat>(sum(typeA) + 1,3);
   mat coord_b = zeros<mat>(sum(typeB) + 1,3);
@@ -96,6 +103,7 @@ int main(int argc, char** argv) {
   for(int i=0; i < coord.n_rows; i++)  { 
      if(type[i] == argv[2] ){coord_a.row(newJ) = coord.row(i); newJ++;}
    }
+
   newJ = 0;
   for(int i=0; i < coord.n_rows; i++)  { 
      if(type[i] == argv[3] ){coord_b.row(newJ) = coord.row(i); newJ++;}
@@ -109,13 +117,8 @@ int main(int argc, char** argv) {
   cube rho_a = getGaussDistr(coord_a,R, The, Phi, X, Y, Z, sig);
   cube rho_b = getGaussDistr(coord_b,R, The, Phi, X, Y, Z, sig);
   cube rhoAll = getGaussDistr(coord,R, The, Phi, X, Y, Z, sig);
+vec getGaussAnal(mat coord, double q1, double q2, double q3, double sig){
 
-
-//  vec lastAtom = coord.row(coord.n_rows - 1).t();
-
-coord.print("coord");
-
-  //  cout << "Part 1: Done" << endl;
   //----------------------------------------------------------------------------------------------------------------
   // Part 2) Constructing Basis Functions -> g_n(r),  and Yn(Theta, Phi) 
   //----------------------------------------------------------------------------------------------------------------
@@ -151,8 +154,7 @@ coord.print("coord");
   cube Y8 = getY(8,The, Phi);
   cube Y9 = getY(9,The, Phi);
 
-
-  vec Cbuff(2); // for type a and type b
+  vec Cbuff(3); // for type a and type b
 
   //----------------------------------------------------------------------------------------------------------------
   // Part 3) get coefs c_anlm by Integration ->  where C(a,n,I) where a is the type, n is the radial basis function
@@ -162,141 +164,64 @@ coord.print("coord");
   cube intMea = rho_a%GLC;
   cube intMeb = rho_b%GLC;
   cube intAll = rhoAll%GLC;
-  cube C = 100*ones<cube>(3,3,100); // (Type, n, all the coeffs)
+  cube C = 100*ones<cube>(typesN,radialN,100); // (Type, n, all the coeffs) -- exactly 100 for l = 9
   int globalI = 0;
 
-
-  for(int n=0; n < 3; n++) {
+  // for l = 0;
+  for(int n=0; n < radialN; n++) {
     Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getTMat(n,0,0,g,Y0,R,The,Phi));
-    for(int i=0; i < 3; i++){
+    for(int i=0; i < typesN; i++){
        C(i,n,0) = Cbuff(i);
     }
   }
 
-  
-  for(int m=-1; m <= 1; m++) {
+for(int l = 1; l <= lMax; l++){
+  for(int m=-l; m <= l; m++) {
     globalI++;
-    for(int n=0; n < 3; n++) {
-      Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,1,m,g,Y1,R,The,Phi));
-      for(int i=0; i<3;i++){
+    for(int n=0; n < radialN; n++) {
+        if(l == 1){Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,l,m,g,Y1,R,The,Phi));}
+        else if(l == 2){Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,l,m,g,Y2,R,The,Phi));}
+        else if(l == 3){Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,l,m,g,Y3,R,The,Phi));}
+        else if(l == 4){Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,l,m,g,Y4,R,The,Phi));}
+        else if(l == 5){Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,l,m,g,Y5,R,The,Phi));}
+        else if(l == 6){Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,l,m,g,Y6,R,The,Phi));}
+        else if(l == 7){Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,l,m,g,Y7,R,The,Phi));}
+        else if(l == 8){Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,l,m,g,Y8,R,The,Phi));}
+        else if(l == 9){Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,l,m,g,Y9,R,The,Phi));}
+        else{cout << "ERROR, l too large" << endl;}
+      for(int i=0; i<typesN;i++){
       C(i,n,globalI) = Cbuff(i);
       }
     }
   }
+}
 
-  for(int m=-2; m <= 2; m++) {
-    globalI++;
-    for(int n=0; n < 3; n++) {
-      Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,2,m,g,Y2,R,The,Phi));
-      for(int i=0; i<3;i++){
-      C(i,n,globalI) = Cbuff(i);
-      }
-    }
-  }
-
-  for(int m=-3; m <= 3; m++) {
-    globalI++;
-    for(int n=0; n < 3; n++) {
-      Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,3,m,g,Y3,R,The,Phi));
-      for(int i=0; i<3;i++){
-      C(i,n,globalI) = Cbuff(i);
-      }
-    }
-  }
-
-  for(int m=-4; m <= 4; m++) {
-    globalI++;
-    for(int n=0; n < 3; n++) {
-      Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,4,m,g,Y4,R,The,Phi));
-      for(int i=0; i<3;i++){
-      C(i,n,globalI) = Cbuff(i);
-      }
-    }
-  }
-
-  for(int m=-5; m <= 5; m++) {
-    globalI++;
-    for(int n=0; n < 3; n++) {
-      Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,5,m,g,Y5,R,The,Phi));
-      for(int i=0; i<3;i++){
-      C(i,n,globalI) = Cbuff(i);
-      }
-    }
-  }
-
-  for(int m=-6; m <= 6; m++) {
-    globalI++;
-    for(int n=0; n < 3; n++) {
-      Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,6,m,g,Y6,R,The,Phi));
-      for(int i=0; i<3;i++){
-      C(i,n,globalI) = Cbuff(i);
-      }
-    }
-  }
-
-  for(int m=-7; m <= 7; m++) {
-    globalI++;
-    for(int n=0; n < 3; n++) {
-      Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,7,m,g,Y7,R,The,Phi));
-      for(int i=0; i<3;i++){
-      C(i,n,globalI) = Cbuff(i);
-      }
-    }
-  }
-
-  for(int m=-8; m <= 8; m++) {
-    globalI++;
-    for(int n=0; n < 3; n++) {
-      Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,8,m,g,Y8,R,The,Phi));
-      for(int i=0; i<3;i++){
-      C(i,n,globalI) = Cbuff(i);
-      }
-    }
-  }
-
-  for(int m=-9; m <= 9; m++) {
-    globalI++;
-    for(int n=0; n < 3; n++) {
-      Cbuff=rsc*integ3Dvec(intMea,intMeb,intAll, getT(n,9,m,g,Y9,R,The,Phi));
-      for(int i=0; i<3;i++){
-      C(i,n,globalI) = Cbuff(i);
-      }
-    }
-  }
-
-
-//  cout << "Part 3: Done" << endl;
   //----------------------------------------------------------------------------------------------------------------
   // Part 4) get Power Spectrum
   //----------------------------------------------------------------------------------------------------------------
   
  int incrementN = 0; 
 
-  double P[3][3][3][10]; // Power Spectrum P[A-type][n1][n2][l]
+  double P[typesN][radialN][radialN][lMax]; // Power Spectrum P[A-type][n1][n2][l]
   memset(P, 0.0, sizeof P);
 
-  for(int a=0; a < 3; a++){ // Types + All
-    for(int n1=0; n1 < 3; n1++){  
-      for(int n2=0; n2 < 3; n2++){ 
+  for(int a=0; a < typesN; a++){ // Types + All
+    for(int n1=0; n1 < radialN; n1++){  
+      for(int n2=0; n2 < radialN; n2++){ 
 
           incrementN = 0;
 
-        for(int l=0; l <= 9; l++){ 
+        for(int l=0; l <= lMax; l++){ 
           for(int m=-l; m <= l; m++){ 
             P[a][n1][n2][l] += C(a,n1,incrementN)*C(a,n2,incrementN);
             incrementN++;
           }
-            cout << a  << " " <<n1 << " "  << n2 << " " << l << " " << P[a][n1][n2][l] << endl;
-//            cout << P[a][n1][n2][l] << endl;
+//            cout << a  << " " <<n1 << " "  << n2 << " " << l << " " << P[a][n1][n2][l] << endl;
+            cout << P[a][n1][n2][l] << endl;
         }
       }
     }
   }
-
-//  cout << "Part 4: Done" << endl;
-
-  
-
 
 return 0;
 }

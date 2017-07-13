@@ -304,8 +304,8 @@ cube getSphericalToCartCubeZ( vec R, vec Theta, vec Phi){
 //----------------------------------------------------------------------------------------------------------------------------------------------
 vec getGaussAnalType(mat coord, double q1, double q2, double q3, double sig, vec type){
 
-  sig = 1/sig;
-  sig = sig*sig;
+//  sig = 1/sig;
+//  sig = sig*sig;
 
   vec x= zeros<vec>(2);
   double buff = 0;

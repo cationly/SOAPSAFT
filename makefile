@@ -1,2 +1,2 @@
 all:
-	g++ -O3 soapNNfast.cpp -larmadillo
+	g++ -O3 soapSaft.cpp -larmadillo

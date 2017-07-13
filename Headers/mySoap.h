@@ -14,6 +14,27 @@
 using namespace std;
 using namespace arma;
 //----------------------------------------------------------------------------------------------------------------------------------------------
+//                                                      SOAP SAFT                        
+//----------------------------------------------------------------------------------------------------------------------------------------------
+double getGaussAnalSoap(mat coord, double q1, double q2, double q3, double sig){
+  vec x= zeros<vec>(2);
+  double buff = 0;
+
+ for(int i=0; i < coord.n_rows; i++)
+
+     {
+        buff = coord(i,0) * q1 + coord(i,1)*q2 + coord(i,2)*q3;
+
+         x(0) = x(0) + cos(buff);
+         x(1) = x(1) - sin(buff);
+
+        }
+
+ return 5.56832799683171*sqrt(sig*sig*sig)*exp(-(q1*q1 + q2*q2 + q3*q3)*sig*0.25)*sqrt(x(0)*x(0) + x(1)*x(1));
+
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------------------------
 cube getY(int l, vec Theta, vec Phi){
  cube Yn = zeros<cube>(2*l + 1,Theta.n_elem, Phi.n_elem); 
@@ -95,6 +116,32 @@ cube getGaussDistr( mat coord,vec R, vec The, vec Phi, cube X, cube Y , cube Z, 
           x3 = Z.at(i,j,k);
 //          G(i,j,k) = G(i,j,k) + exp(-abs((coord(p,0) - x1)) - abs((coord(p,1) - x2)) - abs((coord(p,2) - x3)));
           G.at(i,j,k) = G.at(i,j,k) + exp(-pow(((coord(p,0) - x1)),2) - pow((coord(p,1) - x2),2) - pow((coord(p,2) - x3),2)/1.0);
+         }
+
+ return G;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------------------------
+cube getGaussDistrFourier( mat coord,vec R, vec The, vec Phi, cube X, cube Y , cube Z, double sig){
+//!!!! DOUNT FORGET IN MAIN TO DO:
+//  sig = 1/sig;
+//  sig = sig*sig;
+//  sig = 0.5*sig;
+//  DONT FORGET TO RESCALE ORIGIN FOR GAUSS-LEGENDRE QUADUATURE!
+  
+  cube G(R.n_elem,The.n_elem,Phi.n_elem);
+  double x1, x2, x3; // X1 = R*sin(Theta)*cos(Phi), X2 = R*sin(Theta)*sin(Phi), X3 = R*cos(Theta) 
+
+  for(int p=0; p < coord.n_rows - 1; p++)
+    for(int i=0; i < R.n_rows; i++)
+      for(int j=0; j < The.n_rows; j++)
+        for(int k=0; k < Phi.n_rows; k++){ 
+          x1 = X.at(i,j,k);
+          x2 = Y.at(i,j,k);
+          x3 = Z.at(i,j,k);
+//          G(i,j,k) = G(i,j,k) + exp(-abs((coord(p,0) - x1)) - abs((coord(p,1) - x2)) - abs((coord(p,2) - x3)));
+//          G.at(i,j,k) = G.at(i,j,k) + exp(-pow(((coord(p,0) - x1)),2) - pow((coord(p,1) - x2),2) - pow((coord(p,2) - x3),2)/1.0);
+          G(i,j,k) = G(i,j,k) + getGaussAnalSoap( coord, x1, x2, x3, sig);
          }
 
  return G;
